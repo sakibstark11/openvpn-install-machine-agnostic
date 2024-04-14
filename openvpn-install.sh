@@ -624,6 +624,12 @@ function installOpenVPN() {
 		CLIENT=${CLIENT:-client}
 		PASS=${PASS:-1}
 		CONTINUE=${CONTINUE:-y}
+		# Agnostic variables
+		SERVER_CN_SUPPLIED=
+		SERVER_NAME_SUPPLIED=
+		SERVER_CA_CERT_SUPPLIED=
+		SERVER_CA_KEY_SUPPLIED=
+		DH_KEY_SUPPLIED=
 
 		# Behind NAT, we'll default to the publicly reachable IPv4/IPv6.
 		if [[ $IPV6_SUPPORT == "y" ]]; then
@@ -723,19 +729,65 @@ function installOpenVPN() {
 			;;
 		esac
 
-		# Generate a random, alphanumeric identifier of 16 characters for CN and one for server name
-		SERVER_CN="cn_$(head /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 16 | head -n 1)"
-		echo "$SERVER_CN" >SERVER_CN_GENERATED
-		SERVER_NAME="server_$(head /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 16 | head -n 1)"
-		echo "$SERVER_NAME" >SERVER_NAME_GENERATED
+		# # Generate a random, alphanumeric identifier of 16 characters for CN and one for server name
+		# SERVER_CN="cn_$(head /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 16 | head -n 1)"
+		# echo "$SERVER_CN" >SERVER_CN_GENERATED
+		# SERVER_NAME="server_$(head /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 16 | head -n 1)"
+		# echo "$SERVER_NAME" >SERVER_NAME_GENERATED
 
-		# Create the PKI, set up the CA, the DH params and the server certificate
-		./easyrsa init-pki
-		./easyrsa --batch --req-cn="$SERVER_CN" build-ca nopass
 
-		if [[ $DH_TYPE == "2" ]]; then
-			# ECDH keys are generated on-the-fly so we don't need to generate them beforehand
-			openssl dhparam -out dh.pem $DH_KEY_SIZE
+		# Check if SERVER_CN_SUPPLIED variable is set
+		if [[ -n $SERVER_CN_SUPPLIED ]]; then
+			SERVER_CN=$SERVER_CN_SUPPLIED
+		else
+			# Generate a random, alphanumeric identifier of 16 characters for CN
+			SERVER_CN="cn_$(head /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 16 | head -n 1)"
+		fi
+
+		# Echo the SERVER_CN value into SERVER_CN_GENERATED
+		echo "$SERVER_CN" > SERVER_CN_GENERATED
+
+		# Check if SERVER_NAME_SUPPLIED variable is set
+		if [[ -n $SERVER_NAME_SUPPLIED ]]; then
+			SERVER_NAME=$SERVER_NAME_SUPPLIED
+		else
+			# Generate a random, alphanumeric identifier of 16 characters for server name
+			SERVER_NAME="server_$(head /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 16 | head -n 1)"
+		fi
+
+		# Echo the SERVER_NAME value into SERVER_NAME_GENERATED
+		echo "$SERVER_NAME" > SERVER_NAME_GENERATED
+
+		# # Create the PKI, set up the CA, the DH params and the server certificate
+		# ./easyrsa init-pki
+		# ./easyrsa --batch --req-cn="$SERVER_CN" build-ca nopass
+
+		# Check if CA_CERT_SUPPLIED and CA_KEY_SUPPLIED are supplied
+		if [[ -n "${CA_CERT_SUPPLIED}" && -n "${CA_KEY_SUPPLIED}" ]]; then
+			# Echo the supplied CA_CERT_SUPPLIED and CA_KEY_SUPPLIED into their respective files
+			echo "$CA_CERT_SUPPLIED" > pki/ca.crt
+			echo "$CA_KEY_SUPPLIED" > pki/private/ca.key
+		else
+			# Generate the PKI and set up the CA if CA_CERT_SUPPLIED or CA_KEY_SUPPLIED are not supplied
+			./easyrsa init-pki
+			./easyrsa --batch --req-cn="$SERVER_CN" build-ca nopass
+		fi
+
+		# if [[ $DH_TYPE == "2" ]]; then
+		# 	# ECDH keys are generated on-the-fly so we don't need to generate them beforehand
+		# 	openssl dhparam -out dh.pem $DH_KEY_SIZE
+		# fi
+
+		# Check if DH_KEY is supplied
+		if [[ -n $DH_KEY_SUPPLIED ]]; then
+			# Echo the supplied DH_KEY into dh.pem
+			echo "$DH_KEY_SUPPLIED" > dh.pem
+		else
+			# Generate DH parameters if DH_TYPE is set to 2
+			if [[ $DH_TYPE == "2" ]]; then
+				# ECDH keys are generated on-the-fly
+				openssl dhparam -out dh.pem $DH_KEY_SIZE
+			fi
 		fi
 
 		./easyrsa --batch build-server-full "$SERVER_NAME" nopass
